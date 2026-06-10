@@ -44,6 +44,8 @@ interface Driver {
   camera_provider: string | null;
   camera_request_status: string | null;
   assigned_camera_serial: string | null;
+  samsara_driver_id: string | null;
+  samsara_vehicle_id: string | null;
   total_earnings: number;
   completed_deliveries: number;
   paypal_email: string | null;
@@ -362,21 +364,8 @@ function DriverSheet({
                 <Row
                   label="Provider"
                   value={
-                    <span className="flex items-center gap-1.5">
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs font-bold ${
-                          driver.camera_provider === "samsara"
-                            ? "bg-blue-500/20 text-blue-400"
-                            : "bg-orange-500/20 text-orange-400"
-                        }`}
-                      >
-                        {driver.camera_provider.toUpperCase()}
-                      </span>
-                      {driver.camera_provider === "zonar" && (
-                        <span className="text-xs text-muted-foreground">
-                          (USA & Canada only)
-                        </span>
-                      )}
+                    <span className="rounded px-2 py-0.5 text-xs font-bold bg-blue-500/20 text-blue-400">
+                      {driver.camera_provider.toUpperCase()}
                     </span>
                   }
                 />
@@ -392,8 +381,20 @@ function DriverSheet({
                 />
                 {driver.assigned_camera_serial && (
                   <Row
-                    label="Serial / Tracking"
+                    label="Camera Serial"
                     value={<span className="font-mono text-xs">{driver.assigned_camera_serial}</span>}
+                  />
+                )}
+                {driver.samsara_driver_id && (
+                  <Row
+                    label="Samsara Driver ID"
+                    value={<span className="font-mono text-xs text-blue-400">{driver.samsara_driver_id}</span>}
+                  />
+                )}
+                {driver.samsara_vehicle_id && (
+                  <Row
+                    label="Samsara Vehicle ID"
+                    value={<span className="font-mono text-xs text-blue-400">{driver.samsara_vehicle_id}</span>}
                   />
                 )}
               </>
@@ -681,13 +682,7 @@ export default function DriversPage() {
                                 <span className="text-xs text-muted-foreground">—</span>
                               ) : d.camera_opt_in ? (
                                 <div>
-                                  <span
-                                    className={`rounded px-1.5 py-0.5 text-xs font-bold ${
-                                      d.camera_provider === "samsara"
-                                        ? "bg-blue-500/20 text-blue-400"
-                                        : "bg-orange-500/20 text-orange-400"
-                                    }`}
-                                  >
+                                  <span className="rounded px-1.5 py-0.5 text-xs font-bold bg-blue-500/20 text-blue-400">
                                     {d.camera_provider?.toUpperCase() || "—"}
                                   </span>
                                   {d.camera_request_status && (
