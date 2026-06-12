@@ -27,69 +27,14 @@ const COUNTRY_FLAGS: Record<string, string> = {
   US: "🇺🇸", CA: "🇨🇦", AU: "🇦🇺", GB: "🇬🇧", NZ: "🇳🇿", IN: "🇮🇳",
 };
 
-// Static fallback centroid lookup for common regions/cities
-const KNOWN_CENTROIDS: Record<string, GeoPoint> = {
-  ontario: { lat: 43.7, lng: -79.4 },
-  toronto: { lat: 43.65, lng: -79.38 },
-  quebec: { lat: 46.8, lng: -71.2 },
-  "british columbia": { lat: 49.28, lng: -123.1 },
-  vancouver: { lat: 49.28, lng: -123.12 },
-  alberta: { lat: 51.05, lng: -114.07 },
-  calgary: { lat: 51.05, lng: -114.07 },
-  edmonton: { lat: 53.55, lng: -113.5 },
-  "new york": { lat: 40.71, lng: -74.01 },
-  california: { lat: 34.05, lng: -118.24 },
-  texas: { lat: 30.27, lng: -97.74 },
-  florida: { lat: 25.77, lng: -80.19 },
-  illinois: { lat: 41.85, lng: -87.65 },
-  chicago: { lat: 41.85, lng: -87.65 },
-  "los angeles": { lat: 34.05, lng: -118.24 },
-  washington: { lat: 38.9, lng: -77.04 },
-  "united states": { lat: 38.9, lng: -96.0 },
-  canada: { lat: 56.1, lng: -106.35 },
-  australia: { lat: -25.3, lng: 133.8 },
-  sydney: { lat: -33.87, lng: 151.21 },
-  melbourne: { lat: -37.81, lng: 144.96 },
-  "united kingdom": { lat: 55.38, lng: -3.44 },
-  london: { lat: 51.51, lng: -0.13 },
-  india: { lat: 20.59, lng: 78.96 },
-  mumbai: { lat: 19.08, lng: 72.88 },
-  delhi: { lat: 28.63, lng: 77.22 },
-  "new zealand": { lat: -40.9, lng: 174.89 },
-  auckland: { lat: -36.85, lng: 174.76 },
+const COUNTRY_CENTROIDS: Record<string, GeoPoint> = {
+  US: { lat: 39.5, lng: -98.35 },
+  CA: { lat: 56.1, lng: -106.35 },
+  AU: { lat: -25.3, lng: 133.8 },
+  GB: { lat: 55.38, lng: -3.44 },
+  NZ: { lat: -40.9, lng: 174.89 },
+  IN: { lat: 20.59, lng: 78.96 },
 };
-
-const NOMINATIM_CACHE: Record<string, GeoPoint | null> = {};
-
-async function geocodeRegion(name: string, country: string): Promise<GeoPoint | null> {
-  const key = `${name.toLowerCase()}_${country.toLowerCase()}`;
-  if (key in NOMINATIM_CACHE) return NOMINATIM_CACHE[key];
-
-  const lower = name.toLowerCase();
-  for (const [k, v] of Object.entries(KNOWN_CENTROIDS)) {
-    if (lower.includes(k) || k.includes(lower)) {
-      NOMINATIM_CACHE[key] = v;
-      return v;
-    }
-  }
-
-  try {
-    const query = encodeURIComponent(`${name}, ${country}`);
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`,
-      { headers: { "User-Agent": "PicknDropAdminPanel/1.0" } },
-    );
-    const data = await res.json();
-    if (data?.[0]) {
-      const pt = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      NOMINATIM_CACHE[key] = pt;
-      return pt;
-    }
-  } catch { /* ignore */ }
-
-  NOMINATIM_CACHE[key] = null;
-  return null;
-}
 
 const WORLD_ATLAS = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 const W = 800; const H = 400;
@@ -110,10 +55,16 @@ export default function PricingRegionsPage() {
 
   // Map state
   const [geoData, setGeoData] = useState<unknown>(null);
-  const [points, setPoints] = useState<Array<{ region: Region; pt: GeoPoint }>>([]);
-  const [geocoding, setGeocoding] = useState(false);
-  const [hovered, setHovered] = useState<Region | null>(null);
+  const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Group regions by country for map pins
+  const countryGroups = regions.reduce<Record<string, Region[]>>((acc, r) => {
+    const c = (r.country ?? "").toUpperCase();
+    if (!c || !COUNTRY_CENTROIDS[c]) return acc;
+    (acc[c] ??= []).push(r);
+    return acc;
+  }, {});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,28 +94,6 @@ export default function PricingRegionsPage() {
       .catch(() => {});
   }, [tab, geoData]);
 
-  // Geocode regions when map tab opens and regions are loaded
-  useEffect(() => {
-    if (tab !== "map" || regions.length === 0 || geocoding) return;
-    setGeocoding(true);
-    let cancelled = false;
-    (async () => {
-      const results: Array<{ region: Region; pt: GeoPoint }> = [];
-      for (let i = 0; i < regions.length; i++) {
-        if (cancelled) break;
-        const r = regions[i];
-        const name = r.region_name ?? r.name ?? "";
-        if (!name) continue;
-        // Delay between Nominatim calls to respect rate limit
-        if (i > 0) await new Promise((res) => setTimeout(res, 1100));
-        const pt = await geocodeRegion(name, r.country ?? "");
-        if (pt && !cancelled) results.push({ region: r, pt });
-        if (!cancelled) setPoints([...results]);
-      }
-      if (!cancelled) setGeocoding(false);
-    })();
-    return () => { cancelled = true; };
-  }, [tab, regions, geocoding]);
 
   function startEdit(r: Region) {
     const id = r.id;
@@ -349,7 +278,7 @@ export default function PricingRegionsPage() {
           <CardContent className="p-4 space-y-4">
             {/* Legend */}
             <div className="flex items-center gap-6 flex-wrap">
-              <span className="text-xs text-muted-foreground font-medium">Surge Cap:</span>
+              <span className="text-xs text-muted-foreground font-medium">Avg Surge Cap per Country:</span>
               {[
                 { color: "#22c55e", label: "≤ 1.5×  Low" },
                 { color: "#f59e0b", label: "≤ 2.0×  Medium" },
@@ -360,16 +289,11 @@ export default function PricingRegionsPage() {
                   {label}
                 </span>
               ))}
-              {geocoding && (
-                <span className="text-xs text-cyan-400 animate-pulse">
-                  Geocoding regions ({points.length}/{regions.length})…
-                </span>
-              )}
             </div>
 
             {/* SVG world map */}
             <div className="relative bg-muted/20 rounded-xl overflow-hidden border border-border">
-              {(!geoData) ? (
+              {!geoData ? (
                 <div className="flex items-center justify-center h-80 text-muted-foreground text-sm">
                   Loading map…
                 </div>
@@ -389,32 +313,45 @@ export default function PricingRegionsPage() {
                     />
                   ))}
 
-                  {/* Region pins */}
-                  {points.map(({ region, pt }) => {
+                  {/* One pin per country */}
+                  {Object.entries(countryGroups).map(([code, group]) => {
+                    const pt = COUNTRY_CENTROIDS[code];
                     const [px, py] = projection([pt.lng, pt.lat]) ?? [0, 0];
-                    const surge = region.surge_cap ?? region.surgeCap ?? 1.0;
-                    const color = surgeColor(surge);
-                    const isHov = hovered?.id === region.id;
-                    const r = isHov ? 10 : 7;
+                    const avgSurge = group.reduce((s, r) => s + (r.surge_cap ?? r.surgeCap ?? 1), 0) / group.length;
+                    const color = surgeColor(avgSurge);
+                    const isHov = hoveredCountry === code;
+                    const radius = isHov ? 11 : 8;
+                    const tooltipW = 160;
+                    const tooltipH = Math.min(group.length, 6) * 13 + 28;
                     return (
                       <g
-                        key={region.id}
+                        key={code}
                         transform={`translate(${px},${py})`}
                         style={{ cursor: "pointer" }}
-                        onMouseEnter={() => setHovered(region)}
-                        onMouseLeave={() => setHovered(null)}
+                        onMouseEnter={() => setHoveredCountry(code)}
+                        onMouseLeave={() => setHoveredCountry(null)}
                       >
-                        <circle r={r + 3} fill={color} opacity={0.15} />
-                        <circle r={r} fill={color} opacity={0.85} />
+                        <circle r={radius + 4} fill={color} opacity={0.12} />
+                        <circle r={radius} fill={color} opacity={0.85} />
+                        <text x={0} y={4} textAnchor="middle" fill="#0f172a" fontSize={9} fontWeight={700}>
+                          {group.length}
+                        </text>
                         {isHov && (
                           <>
-                            <rect x={-64} y={-52} width={128} height={44} rx={6} fill="hsl(var(--background))" stroke="hsl(var(--border))" strokeWidth={1} />
-                            <text x={0} y={-34} textAnchor="middle" fill="hsl(var(--foreground))" fontSize={10} fontWeight={600}>
-                              {region.region_name ?? region.name}
+                            <rect x={-tooltipW / 2} y={-(tooltipH + 14)} width={tooltipW} height={tooltipH} rx={6} fill="#1e293b" stroke="#334155" strokeWidth={1} />
+                            <text x={0} y={-(tooltipH + 14) + 14} textAnchor="middle" fill="#e2e8f0" fontSize={10} fontWeight={700}>
+                              {COUNTRY_FLAGS[code] ?? "🌐"} {code} — {group.length} regions
                             </text>
-                            <text x={0} y={-20} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={9}>
-                              {((region.commission_rate ?? region.commissionRate ?? 0) * 100).toFixed(1)}% commission · {surge.toFixed(1)}× surge
-                            </text>
+                            {group.slice(0, 6).map((r, idx) => (
+                              <text key={r.id} x={-tooltipW / 2 + 8} y={-(tooltipH + 14) + 28 + idx * 13} fill="#94a3b8" fontSize={8}>
+                                {r.region_name ?? r.name} · {((r.commission_rate ?? 0) * 100).toFixed(0)}% · {(r.surge_cap ?? 1).toFixed(1)}×
+                              </text>
+                            ))}
+                            {group.length > 6 && (
+                              <text x={0} y={-(tooltipH + 14) + 28 + 6 * 13} textAnchor="middle" fill="#64748b" fontSize={8}>
+                                +{group.length - 6} more
+                              </text>
+                            )}
                           </>
                         )}
                       </g>
@@ -424,21 +361,21 @@ export default function PricingRegionsPage() {
               )}
             </div>
 
-            {/* Region list below map */}
-            {points.length > 0 && (
+            {/* Country summary chips */}
+            {Object.keys(countryGroups).length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {points.map(({ region }) => {
-                  const surge = region.surge_cap ?? region.surgeCap ?? 1.0;
+                {Object.entries(countryGroups).map(([code, group]) => {
+                  const avgSurge = group.reduce((s, r) => s + (r.surge_cap ?? r.surgeCap ?? 1), 0) / group.length;
                   return (
                     <div
-                      key={region.id}
+                      key={code}
                       className="flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs cursor-pointer hover:bg-muted/40 transition-colors"
-                      onMouseEnter={() => setHovered(region)}
-                      onMouseLeave={() => setHovered(null)}
+                      onMouseEnter={() => setHoveredCountry(code)}
+                      onMouseLeave={() => setHoveredCountry(null)}
                     >
-                      <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: surgeColor(surge) }} />
-                      <span className="font-medium">{region.region_name ?? region.name}</span>
-                      <span className="text-muted-foreground">{COUNTRY_FLAGS[region.country?.toUpperCase()] ?? "🌐"}</span>
+                      <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: surgeColor(avgSurge) }} />
+                      <span className="font-medium">{COUNTRY_FLAGS[code] ?? "🌐"} {code}</span>
+                      <span className="text-muted-foreground">{group.length} regions</span>
                     </div>
                   );
                 })}
