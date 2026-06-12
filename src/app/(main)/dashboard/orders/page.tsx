@@ -269,6 +269,7 @@ export default function OrdersPage() {
                                 const statusHistory = detail?.status_history ?? o.status_history ?? [];
                                 const receiptUrl = detail?.receipt_url ?? o.receipt_url;
                                 return (
+                              <>
                               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                 <div>
                                   <p className="text-xs font-semibold text-muted-foreground mb-2">
@@ -361,6 +362,7 @@ export default function OrdersPage() {
                                   </div>
                                 </div>
                               )}
+                              </>
                                 );
                               })()}
                             </td>
