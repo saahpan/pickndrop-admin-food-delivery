@@ -18,6 +18,7 @@ interface Region {
   commissionRate?: number;
   surge_cap?: number;
   surgeCap?: number;
+  base_price?: number;
 }
 
 interface GeoPoint { lat: number; lng: number }
@@ -119,9 +120,11 @@ export default function PricingRegionsPage() {
     setError(null);
     try {
       const res = await fetch("/api/pricing/regions");
-      if (!res.ok) throw new Error("Pricing API unavailable — make sure PicknDrop app is running on port 3000");
+      if (!res.ok) throw new Error("Pricing API unavailable");
       const data = await res.json();
-      setRegions(data.regions || data || []);
+      const list = data.regions;
+      if (!Array.isArray(list)) throw new Error(data.error || "Unexpected response from pricing API");
+      setRegions(list);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load regions");
     } finally {
@@ -184,6 +187,7 @@ export default function PricingRegionsPage() {
           id: r.id,
           commission_rate: parseFloat(editing[r.id]?.commission || "0"),
           surge_cap: parseFloat(editing[r.id]?.surge || "0"),
+          base_price: r.base_price ?? 0,
         }),
       });
       setRegions((prev) =>
