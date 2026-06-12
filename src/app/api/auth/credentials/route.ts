@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-const ADMIN_EMAIL = "atul@admin";
+const ADMIN_EMAIL = "atul@admin.com";
 const ADMIN_PASSWORD = "Admin$1981";
 const SESSION_DURATION_MS = 60 * 60 * 24 * 5 * 1000; // 5 days
 
