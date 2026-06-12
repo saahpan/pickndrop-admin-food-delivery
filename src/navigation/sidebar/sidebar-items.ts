@@ -1,4 +1,5 @@
 import {
+  Bell,
   Camera,
   Car,
   ChartBar,
@@ -8,6 +9,7 @@ import {
   MessageSquare,
   type LucideIcon,
   Scale,
+  Settings,
   ShoppingBag,
   UtensilsCrossed,
   Users,
@@ -126,6 +128,22 @@ export const sidebarItems: NavGroup[] = [
         title: "Support Chat",
         url: "/dashboard/support",
         icon: MessageSquare,
+      },
+    ],
+  },
+  {
+    id: 6,
+    label: "App Management",
+    items: [
+      {
+        title: "Push Notifications",
+        url: "/dashboard/notifications",
+        icon: Bell,
+      },
+      {
+        title: "App Settings",
+        url: "/dashboard/settings",
+        icon: Settings,
       },
     ],
   },
