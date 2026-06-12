@@ -102,18 +102,20 @@ export default function SettingsPage() {
                       When on, both apps show this screen instead of the main app.
                     </p>
                   </div>
-                  <button
+                  <div
+                    role="switch"
+                    aria-checked={config.enabled}
                     onClick={() => setConfig((c) => ({ ...c, enabled: !c.enabled }))}
-                    className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${
-                      config.enabled ? "bg-cyan-500" : "bg-muted"
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ${
+                      config.enabled ? "bg-cyan-500" : "bg-muted border border-border"
                     }`}
                   >
                     <span
-                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                      className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 my-0.5 ${
                         config.enabled ? "translate-x-5" : "translate-x-0.5"
                       }`}
                     />
-                  </button>
+                  </div>
                 </div>
 
                 {/* Title */}

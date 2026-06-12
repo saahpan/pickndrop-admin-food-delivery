@@ -129,6 +129,52 @@ function getOnboardingSteps(d: Driver) {
   ];
 }
 
+function DeleteDriverZone({ driverId, driverName, onDeleted }: { driverId: string; driverName: string; onDeleted: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirm, setConfirm] = useState("");
+
+  async function doDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/drivers/${driverId}/delete`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) onDeleted();
+    } catch { /* silent */ } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+      <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-3">Danger Zone</p>
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="text-sm text-red-400 hover:text-red-300 underline underline-offset-2">
+          Delete this driver account
+        </button>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            This permanently deletes <span className="font-semibold text-foreground">{driverName}</span> from Firestore and Firebase Auth. Type <span className="font-mono font-semibold">DELETE</span> to confirm.
+          </p>
+          <Input
+            placeholder="Type DELETE"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            className="h-8 text-sm font-mono"
+          />
+          <div className="flex gap-2">
+            <Button size="sm" variant="destructive" disabled={confirm !== "DELETE" || deleting} onClick={doDelete}>
+              {deleting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : "Delete permanently"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setOpen(false); setConfirm(""); }}>Cancel</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface PersonaInquiry {
   id: string;
   status: string | null;
@@ -228,6 +274,59 @@ function DriverSheet({
     onUpdate(driver.id, { onboarding_status: status });
   }
 
+  // ── Manual edit state ──────────────────────────────────────────────────
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editResult, setEditResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const [editFields, setEditFields] = useState({
+    first_name: driver.first_name,
+    last_name: driver.last_name,
+    email: driver.email,
+    phone: driver.phone,
+    country: driver.country,
+    vehicle_make: driver.vehicle_make,
+    vehicle_model: driver.vehicle_model,
+    vehicle_year: driver.vehicle_year,
+    vehicle_color: driver.vehicle_color,
+    license_plate: driver.license_plate,
+    terms_accepted: driver.terms_accepted,
+    persona_completed: driver.persona_completed,
+    drivers_license_persona_completed: driver.drivers_license_persona_completed,
+    background_check_unlocked: driver.background_check_unlocked,
+    background_check_status: driver.background_check_status,
+    onboarding_status: driver.onboarding_status,
+    email_verified: driver.email_verified,
+    phone_verified: driver.phone_verified,
+  });
+
+  function field(k: keyof typeof editFields) {
+    return (v: string | boolean) => setEditFields((f) => ({ ...f, [k]: v }));
+  }
+
+  async function saveManual() {
+    setEditSaving(true);
+    setEditResult(null);
+    try {
+      const res = await fetch(`/api/drivers/${driver.uid}/manual`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editFields),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditResult({ ok: true, msg: `Saved: ${(data.updated as string[]).join(", ")}` });
+        onUpdate(driver.id, editFields as unknown as Record<string, string>);
+      } else {
+        setEditResult({ ok: false, msg: data.error || "Save failed" });
+      }
+    } catch (err) {
+      setEditResult({ ok: false, msg: String(err) });
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/40" onClick={onClose} />
@@ -236,9 +335,21 @@ function DriverSheet({
           <h2 className="text-lg font-semibold">
             {driver.first_name} {driver.last_name}
           </h2>
-          <button onClick={onClose} className="rounded-full p-1 hover:bg-muted transition-colors">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setEditOpen((o) => !o); setEditResult(null); }}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                editOpen
+                  ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {editOpen ? "Close Editor" : "✏ Edit / Manual Onboard"}
+            </button>
+            <button onClick={onClose} className="rounded-full p-1 hover:bg-muted transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="space-y-6 p-6">
@@ -294,6 +405,122 @@ function DriverSheet({
               </Button>
             )}
           </div>
+
+          {/* ── Edit / Manual Onboard Panel ───────────────────────────────── */}
+          {editOpen && (
+            <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-5 space-y-6">
+              <p className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">
+                Edit &amp; Manual Onboard — writes directly to Firestore
+              </p>
+
+              {/* Personal info */}
+              <div>
+                <p className="mb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Personal Information</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(["first_name", "last_name", "email", "phone", "country"] as const).map((k) => (
+                    <div key={k} className={k === "email" || k === "country" ? "col-span-2" : ""}>
+                      <label className="mb-1 block text-xs text-muted-foreground capitalize">{k.replace("_", " ")}</label>
+                      <Input
+                        value={editFields[k] as string}
+                        onChange={(e) => field(k)(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Vehicle */}
+              <div>
+                <p className="mb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Vehicle Information</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(["vehicle_make", "vehicle_model", "vehicle_year", "vehicle_color", "license_plate"] as const).map((k) => (
+                    <div key={k}>
+                      <label className="mb-1 block text-xs text-muted-foreground capitalize">{k.replace(/_/g, " ")}</label>
+                      <Input
+                        value={editFields[k] as string}
+                        onChange={(e) => field(k)(e.target.value)}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step overrides */}
+              <div>
+                <p className="mb-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Step Overrides</p>
+                <div className="space-y-2">
+                  {([
+                    ["terms_accepted", "Terms & Conditions accepted"],
+                    ["drivers_license_persona_completed", "Driver's license verified (Persona)"],
+                    ["persona_completed", "Selfie / identity verified (Persona)"],
+                    ["background_check_unlocked", "Background check unlocked"],
+                    ["email_verified", "Email verified"],
+                    ["phone_verified", "Phone verified"],
+                  ] as [keyof typeof editFields, string][]).map(([k, label]) => (
+                    <label key={k} className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-4 py-2.5 hover:bg-muted/20 transition-colors">
+                      <span className="text-sm">{label}</span>
+                      <button
+                        onClick={() => field(k)(!editFields[k])}
+                        className={`relative h-5 w-9 rounded-full transition-colors ${editFields[k] ? "bg-cyan-500" : "bg-muted"}`}
+                      >
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${editFields[k] ? "translate-x-4" : "translate-x-0.5"}`} />
+                      </button>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status selects */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Onboarding Status</label>
+                  <select
+                    value={editFields.onboarding_status}
+                    onChange={(e) => field("onboarding_status")(e.target.value)}
+                    className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    {["in_progress", "submitted", "approved", "rejected"].map((s) => (
+                      <option key={s} value={s}>{ONBOARDING_META[s]?.label ?? s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">Background Check Status</label>
+                  <select
+                    value={editFields.background_check_status}
+                    onChange={(e) => field("background_check_status")(e.target.value)}
+                    className="w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    {["pending", "invited", "clear", "flagged"].map((s) => (
+                      <option key={s} value={s}>{BG_META[s]?.label ?? s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Result */}
+              {editResult && (
+                <div className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${editResult.ok ? "border-green-500/30 bg-green-500/10 text-green-400" : "border-red-500/30 bg-red-500/10 text-red-400"}`}>
+                  {editResult.ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0" />}
+                  {editResult.msg}
+                </div>
+              )}
+
+              <Button
+                className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-semibold"
+                onClick={saveManual}
+                disabled={editSaving}
+              >
+                {editSaving ? (
+                  <span className="flex items-center gap-2"><RefreshCw className="h-4 w-4 animate-spin" /> Saving…</span>
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </div>
+          )}
 
           {/* Onboarding Progress */}
           <div>
@@ -571,6 +798,9 @@ function DriverSheet({
           <p className="text-xs text-muted-foreground">
             Joined: {driver.created_at ? new Date(driver.created_at).toLocaleDateString() : "—"} &middot; UID: {driver.uid}
           </p>
+
+          {/* Danger zone */}
+          <DeleteDriverZone driverId={driver.uid} driverName={`${driver.first_name} ${driver.last_name}`} onDeleted={onClose} />
         </div>
       </div>
     </div>
