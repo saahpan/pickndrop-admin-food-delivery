@@ -32,18 +32,21 @@ async function verifyDriver(authHeader) {
   return admin.auth().verifyIdToken(authHeader.slice(7));
 }
 
-export const handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
+export default async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('', { status: 200, headers: CORS });
+  }
 
   let decoded;
   try {
-    decoded = await verifyDriver(event.headers.authorization ?? event.headers.Authorization);
+    decoded = await verifyDriver(req.headers.get('authorization') ?? req.headers.get('Authorization'));
   } catch {
-    return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Unauthorized' }) };
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
   }
 
   const uid = decoded.uid;
-  const q = event.queryStringParameters ?? {};
+  const url = new URL(req.url);
+  const q = Object.fromEntries(url.searchParams);
   const action = q.action;
 
   const personaHeaders = {
@@ -52,26 +55,25 @@ export const handler = async (event) => {
   };
 
   try {
-    // ── List inquiries for a reference ID ────────────────────────────────────
-    if (event.httpMethod === 'GET' && action === 'list') {
+    // ── List inquiries ───────────────────────────────────────────────────────
+    if (req.method === 'GET' && action === 'list') {
       const ref = q.referenceId ?? '';
-      // Drivers may only list their own inquiries (referenceId starts with their uid)
       if (!ref || !ref.startsWith(uid)) {
-        return { statusCode: 403, headers: CORS, body: JSON.stringify({ error: 'Forbidden' }) };
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: CORS });
       }
       const res = await fetch(
         `${PERSONA_BASE}/inquiries?filter%5Breference-id%5D=${encodeURIComponent(ref)}`,
         { headers: personaHeaders }
       );
-      return { statusCode: res.status, headers: CORS, body: await res.text() };
+      return new Response(await res.text(), { status: res.status, headers: CORS });
     }
 
-    // ── Create a new inquiry ──────────────────────────────────────────────────
-    if (event.httpMethod === 'POST' && action === 'create') {
-      const body = JSON.parse(event.body || '{}');
+    // ── Create inquiry ───────────────────────────────────────────────────────
+    if (req.method === 'POST' && action === 'create') {
+      const body = await req.json();
       const { templateId, referenceId } = body;
       if (!templateId || !referenceId || !referenceId.startsWith(uid)) {
-        return { statusCode: 403, headers: CORS, body: JSON.stringify({ error: 'Forbidden' }) };
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: CORS });
       }
       const res = await fetch(`${PERSONA_BASE}/inquiries`, {
         method: 'POST',
@@ -80,21 +82,21 @@ export const handler = async (event) => {
           data: { attributes: { 'inquiry-template-id': templateId, 'reference-id': referenceId } },
         }),
       });
-      return { statusCode: res.status, headers: CORS, body: await res.text() };
+      return new Response(await res.text(), { status: res.status, headers: CORS });
     }
 
-    // ── Poll inquiry status ───────────────────────────────────────────────────
-    if (event.httpMethod === 'GET' && action === 'get') {
+    // ── Poll inquiry status ──────────────────────────────────────────────────
+    if (req.method === 'GET' && action === 'get') {
       const { inquiryId } = q;
       if (!inquiryId) {
-        return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'inquiryId required' }) };
+        return new Response(JSON.stringify({ error: 'inquiryId required' }), { status: 400, headers: CORS });
       }
       const res = await fetch(`${PERSONA_BASE}/inquiries/${inquiryId}`, { headers: personaHeaders });
-      return { statusCode: res.status, headers: CORS, body: await res.text() };
+      return new Response(await res.text(), { status: res.status, headers: CORS });
     }
 
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Unknown action' }) };
+    return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400, headers: CORS });
   } catch (err) {
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS });
   }
 };
