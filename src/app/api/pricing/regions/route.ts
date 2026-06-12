@@ -1,53 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Pool } from "pg";
 
-const BASE = process.env.PICKNDROP_API_BASE_URL || "https://thepickndrop.us";
+const pool = new Pool({
+  host:     process.env.PRICING_DB_HOST,
+  port:     Number(process.env.PRICING_DB_PORT ?? 5432),
+  database: process.env.PRICING_DB_NAME,
+  user:     process.env.PRICING_DB_USER,
+  password: process.env.PRICING_DB_PASSWORD,
+  ssl: { rejectUnauthorized: false },
+});
 
 export async function GET() {
   try {
-    const res = await fetch(`${BASE}/api/admin/pricing/regions`, { cache: "no-store" });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: "Pricing API error" }));
-      return NextResponse.json(err, { status: res.status });
-    }
-    const data = await res.json();
-    // Normalize upstream field names (region_id → id, country_name → country)
-    const raw: Record<string, unknown>[] = data.regions ?? data ?? [];
-    const regions = raw.map((r) => ({
-      id: r.region_id ?? r.id,
-      region_name: r.region_name ?? r.name,
-      country: r.country_name ?? r.country_code ?? r.country,
-      commission_rate: r.commission_rate,
-      surge_cap: r.surge_cap,
-      base_price: r.base_price,
-    }));
-    return NextResponse.json({ regions });
-  } catch {
-    return NextResponse.json({ error: "Pricing API unavailable" }, { status: 503 });
+    const { rows } = await pool.query(
+      `SELECT region_id AS id, region_name, country_code AS country, base_price,
+              commission_rate, surge_cap
+       FROM regions_config
+       ORDER BY country_code ASC, region_id ASC`
+    );
+    return NextResponse.json({ regions: rows });
+  } catch (err) {
+    console.error("[pricing/regions] GET error:", err);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
-    const body = await req.json();
-    // Map frontend 'id' back to upstream 'region_id'
-    const upstream = {
-      region_id: body.id,
-      commission_rate: body.commission_rate,
-      surge_cap: body.surge_cap,
-      base_price: body.base_price ?? 0,
-    };
-    const res = await fetch(`${BASE}/api/admin/pricing/regions`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(upstream),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: "Pricing API error" }));
-      return NextResponse.json(err, { status: res.status });
+    const { id, commission_rate, surge_cap, base_price } = await req.json();
+    if (!id || commission_rate == null || surge_cap == null) {
+      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
-    const data = await res.json();
-    return NextResponse.json(data);
-  } catch {
-    return NextResponse.json({ error: "Pricing API unavailable" }, { status: 503 });
+    const cr = Math.min(Math.max(Number(commission_rate), 0), 0.99);
+    const sc = Math.min(Math.max(Number(surge_cap), 1.0), 5.0);
+    const bp = Math.max(Number(base_price ?? 0), 0);
+    await pool.query(
+      `UPDATE regions_config SET commission_rate = $1, surge_cap = $2, base_price = $3 WHERE region_id = $4`,
+      [cr, sc, bp, id]
+    );
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[pricing/regions] PATCH error:", err);
+    return NextResponse.json({ error: "Database error" }, { status: 500 });
   }
 }

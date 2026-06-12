@@ -376,15 +376,15 @@ export default function PricingRegionsPage() {
               ) : (
                 <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ display: "block" }}>
                   {/* Ocean */}
-                  <rect width={W} height={H} fill="hsl(var(--muted)/0.3)" />
+                  <rect width={W} height={H} fill="#0f172a" />
 
                   {/* Countries */}
                   {countries && (countries as { features: unknown[] }).features.map((feat: unknown, i: number) => (
                     <path
                       key={i}
                       d={pathGen(feat as GeoPermissibleObjects) ?? ""}
-                      fill="hsl(var(--muted-foreground)/0.08)"
-                      stroke="hsl(var(--border))"
+                      fill="#1e293b"
+                      stroke="#334155"
                       strokeWidth={0.4}
                     />
                   ))}
