@@ -14,6 +14,11 @@ interface OrderItem {
   total: number;
 }
 
+interface StatusHistoryEntry {
+  status: string;
+  timestamp: string;
+}
+
 interface Order {
   id: string;
   order_number: number;
@@ -33,6 +38,8 @@ interface Order {
   pickup_address: string;
   delivery_address: string;
   driver_uid: string | null;
+  receipt_url?: string | null;
+  status_history?: StatusHistoryEntry[];
   created_at: string | null;
   delivered_at: string | null;
 }
@@ -61,6 +68,7 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [orderDetails, setOrderDetails] = useState<Record<string, { status_history?: StatusHistoryEntry[]; receipt_url?: string | null }>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,6 +99,20 @@ export default function OrdersPage() {
     }
     setFiltered(list);
   }, [orders, activeStatus, search]);
+
+  async function expandRow(id: string) {
+    const next = expandedId === id ? null : id;
+    setExpandedId(next);
+    if (next && !orderDetails[id]) {
+      try {
+        const res = await fetch(`/api/orders/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setOrderDetails((prev) => ({ ...prev, [id]: data }));
+        }
+      } catch { /* non-fatal */ }
+    }
+  }
 
   async function updateStatus(id: string, status: string) {
     setUpdatingId(id);
@@ -189,7 +211,7 @@ export default function OrdersPage() {
                         <tr
                           key={o.id}
                           className="border-b border-border/40 hover:bg-muted/20 transition-colors cursor-pointer"
-                          onClick={() => setExpandedId(expandedId === o.id ? null : o.id)}
+                          onClick={() => expandRow(o.id)}
                         >
                           <td className="px-4 py-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
                             #{o.order_number || o.id.slice(0, 8)}
@@ -242,6 +264,11 @@ export default function OrdersPage() {
                         {expandedId === o.id && (
                           <tr key={`${o.id}-exp`} className="border-b border-border/40 bg-muted/10">
                             <td colSpan={9} className="px-6 py-4">
+                              {(() => {
+                                const detail = orderDetails[o.id];
+                                const statusHistory = detail?.status_history ?? o.status_history ?? [];
+                                const receiptUrl = detail?.receipt_url ?? o.receipt_url;
+                                return (
                               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                                 <div>
                                   <p className="text-xs font-semibold text-muted-foreground mb-2">
@@ -308,9 +335,34 @@ export default function OrdersPage() {
                                         {new Date(o.delivered_at).toLocaleString()}
                                       </div>
                                     )}
+                                    {receiptUrl && (
+                                      <div>
+                                        <a href={receiptUrl} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">
+                                          View receipt photo ↗
+                                        </a>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </div>
+                              {statusHistory.length > 0 && (
+                                <div className="mt-4">
+                                  <p className="text-xs font-semibold text-muted-foreground mb-2">STATUS HISTORY</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {statusHistory.map((h, i) => (
+                                      <div key={i} className="flex items-center gap-1.5 text-xs bg-muted/30 rounded-lg px-2.5 py-1.5">
+                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_META[h.status]?.color?.split(" ")[1] ?? "bg-gray-400"}`} />
+                                        <span className="font-medium">{STATUS_META[h.status]?.label ?? h.status}</span>
+                                        <span className="text-muted-foreground">
+                                          {h.timestamp ? new Date(h.timestamp).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                                );
+                              })()}
                             </td>
                           </tr>
                         )}

@@ -15,7 +15,10 @@ if (!admin.apps.length) {
     serviceAccount = JSON.parse(readFileSync(saPath, "utf-8"));
   }
 
-  admin.initializeApp({ credential: admin.credential.cert(serviceAccount as admin.ServiceAccount) });
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  });
 }
 
 export const adminAuth = admin.auth();
