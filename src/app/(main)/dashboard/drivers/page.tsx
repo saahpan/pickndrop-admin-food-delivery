@@ -10,6 +10,9 @@ import {
   Clock,
   ChevronRight,
   X,
+  AlertTriangle,
+  ShieldCheck,
+  ShieldX,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -126,6 +129,41 @@ function getOnboardingSteps(d: Driver) {
   ];
 }
 
+interface PersonaInquiry {
+  id: string;
+  status: string | null;
+  nameFirst: string | null;
+  nameMiddle: string | null;
+  nameLast: string | null;
+  birthdate: string | null;
+}
+
+function nameMatch(a: string | null, b: string | null) {
+  if (!a || !b) return null;
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function NameMatchBadge({ extracted, entered, label }: { extracted: string | null; entered: string; label: string }) {
+  const match = nameMatch(extracted, entered);
+  if (match === null) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <AlertTriangle className="h-3.5 w-3.5 text-yellow-400" />
+        <span>{label}: not extracted</span>
+      </div>
+    );
+  }
+  return (
+    <div className={`flex items-center gap-1.5 text-xs ${match ? "text-green-400" : "text-red-400"}`}>
+      {match ? <ShieldCheck className="h-3.5 w-3.5" /> : <ShieldX className="h-3.5 w-3.5" />}
+      <span>
+        {label}: <span className="font-mono font-semibold">{extracted}</span>
+        {!match && <span className="ml-1 text-muted-foreground">(entered: {entered})</span>}
+      </span>
+    </div>
+  );
+}
+
 function DriverSheet({
   driver,
   onClose,
@@ -140,6 +178,46 @@ function DriverSheet({
   const country = driver.country?.toUpperCase();
   const flag = COUNTRY_FLAGS[country] || "🌐";
   const countryName = COUNTRY_NAMES[country] || driver.country;
+
+  const [licenseInquiry, setLicenseInquiry] = useState<PersonaInquiry | null>(null);
+  const [selfieInquiry, setSelfieInquiry] = useState<PersonaInquiry | null>(null);
+  const [personaLoading, setPersonaLoading] = useState(false);
+
+  useEffect(() => {
+    async function fetchInquiry(id: string): Promise<PersonaInquiry | null> {
+      try {
+        const res = await fetch(`/api/persona/${id}`);
+        if (!res.ok) return null;
+        return await res.json();
+      } catch {
+        return null;
+      }
+    }
+
+    async function load() {
+      setPersonaLoading(true);
+      const [license, selfie] = await Promise.all([
+        driver.drivers_license_persona_inquiry_id
+          ? fetchInquiry(driver.drivers_license_persona_inquiry_id)
+          : Promise.resolve(null),
+        driver.persona_inquiry_id
+          ? fetchInquiry(driver.persona_inquiry_id)
+          : Promise.resolve(null),
+      ]);
+      setLicenseInquiry(license);
+      setSelfieInquiry(selfie);
+      setPersonaLoading(false);
+    }
+
+    load();
+  }, [driver.drivers_license_persona_inquiry_id, driver.persona_inquiry_id]);
+
+  const hasPersonaData = licenseInquiry || selfieInquiry;
+  const source = licenseInquiry ?? selfieInquiry;
+  const firstMatch = source ? nameMatch(source.nameFirst, driver.first_name) : null;
+  const lastMatch = source ? nameMatch(source.nameLast, driver.last_name) : null;
+  const bothMatch = firstMatch === true && lastMatch === true;
+  const anyMismatch = firstMatch === false || lastMatch === false;
 
   async function handleStatusChange(status: string) {
     await fetch(`/api/drivers/${driver.id}`, {
@@ -315,6 +393,63 @@ function DriverSheet({
                 )
               }
             />
+
+            {/* Name match */}
+            {(driver.drivers_license_persona_completed || driver.persona_completed) && (
+              <div className="px-4 py-3 border-t border-border">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Name Match
+                  </p>
+                  {personaLoading && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
+                  {!personaLoading && hasPersonaData && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold border ${
+                        anyMismatch
+                          ? "bg-red-500/10 text-red-400 border-red-500/30"
+                          : bothMatch
+                            ? "bg-green-500/10 text-green-400 border-green-500/30"
+                            : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
+                      }`}
+                    >
+                      {anyMismatch ? "⚠ Mismatch" : bothMatch ? "✓ Match" : "Partial"}
+                    </span>
+                  )}
+                </div>
+
+                {personaLoading ? (
+                  <p className="text-xs text-muted-foreground">Loading Persona data…</p>
+                ) : !hasPersonaData ? (
+                  <p className="text-xs text-muted-foreground italic">No completed inquiry found</p>
+                ) : (
+                  <div className="space-y-2">
+                    <NameMatchBadge
+                      extracted={source?.nameFirst ?? null}
+                      entered={driver.first_name}
+                      label="First"
+                    />
+                    <NameMatchBadge
+                      extracted={source?.nameLast ?? null}
+                      entered={driver.last_name}
+                      label="Last"
+                    />
+                    {source?.nameMiddle && (
+                      <div className="text-xs text-muted-foreground">
+                        Middle on document: <span className="font-mono">{source.nameMiddle}</span>
+                      </div>
+                    )}
+                    {source?.birthdate && (
+                      <div className="text-xs text-muted-foreground">
+                        DOB on document: <span className="font-mono">{source.birthdate}</span>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground pt-1">
+                      Source: {licenseInquiry ? "driver's license" : "selfie"} inquiry
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </Section>
 
           {/* Background Check */}

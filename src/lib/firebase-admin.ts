@@ -4,11 +4,18 @@ import { readFileSync } from "fs";
 import { join } from "path";
 
 if (!admin.apps.length) {
-  const saPath = join(process.cwd(), "service-account-food.json");
-  const serviceAccount = JSON.parse(readFileSync(saPath, "utf-8"));
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+  let serviceAccount: object;
+
+  if (process.env.FIREBASE_FOOD_SA) {
+    serviceAccount = JSON.parse(
+      Buffer.from(process.env.FIREBASE_FOOD_SA, "base64").toString("utf-8"),
+    );
+  } else {
+    const saPath = join(process.cwd(), "service-account-food.json");
+    serviceAccount = JSON.parse(readFileSync(saPath, "utf-8"));
+  }
+
+  admin.initializeApp({ credential: admin.credential.cert(serviceAccount as admin.ServiceAccount) });
 }
 
 export const adminAuth = admin.auth();
