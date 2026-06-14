@@ -13,10 +13,12 @@ export async function GET() {
       phone: u.phone,
       provider: u.provider,
       photo_url: u.photo_url,
-      email_verified: true,
+      email_verified: u.email_verified ?? false,
       disabled: u.disabled,
       created_at: u.created_at,
       last_sign_in: u.last_sign_in,
+      last_login_at: u.last_login_at ?? null,
+      last_login_method: u.last_login_method ?? null,
     }));
     return NextResponse.json({ customers, total: customers.length });
   } catch (err) {
