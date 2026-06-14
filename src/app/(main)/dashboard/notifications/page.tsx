@@ -35,8 +35,8 @@ interface NotifLog {
 interface FoundUser {
   uid: string;
   name: string;
-  email: string;
-  fcm_token: string;
+  email: string | null;
+  fcm_token: string | null;
 }
 
 const BROADCAST_OPTIONS: { value: BroadcastTarget; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -116,6 +116,7 @@ export default function NotificationsPage() {
         }
       } else {
         if (!selectedUser) { setResult({ ok: false, msg: "Select a user first." }); setSending(false); return; }
+        if (!selectedUser.fcm_token) { setResult({ ok: false, msg: `${selectedUser.name} has no push token — they need to open the app first.` }); setSending(false); return; }
         const res = await fetch("/api/notifications/send-to", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -222,15 +223,20 @@ export default function NotificationsPage() {
                 </div>
 
                 {selectedUser ? (
-                  <div className="flex items-center gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-4 py-3">
-                    <UserCheck className="h-5 w-5 text-cyan-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{selectedUser.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{selectedUser.email}</p>
+                  <div className={`rounded-xl border px-4 py-3 ${selectedUser.fcm_token ? "border-cyan-500/30 bg-cyan-500/5" : "border-yellow-500/30 bg-yellow-500/5"}`}>
+                    <div className="flex items-center gap-3">
+                      <UserCheck className={`h-5 w-5 shrink-0 ${selectedUser.fcm_token ? "text-cyan-400" : "text-yellow-400"}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">{selectedUser.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{selectedUser.email}</p>
+                      </div>
+                      <button onClick={() => setSelectedUser(null)} className="shrink-0 text-muted-foreground hover:text-foreground">
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button onClick={() => setSelectedUser(null)} className="shrink-0 text-muted-foreground hover:text-foreground">
-                      <X className="h-4 w-4" />
-                    </button>
+                    {!selectedUser.fcm_token && (
+                      <p className="mt-2 text-xs text-yellow-400">⚠ No push token — this person needs to open the app first before they can receive notifications.</p>
+                    )}
                   </div>
                 ) : (
                   <div className="relative">
@@ -257,10 +263,13 @@ export default function NotificationsPage() {
                               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold">
                                 {u.name?.[0] ?? "?"}
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <p className="text-sm font-medium truncate">{u.name}</p>
                                 <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                               </div>
+                              {!u.fcm_token && (
+                                <span className="shrink-0 text-xs text-yellow-500 border border-yellow-500/30 rounded px-1.5 py-0.5">no token</span>
+                              )}
                             </button>
                           ))
                         )}
@@ -301,7 +310,7 @@ export default function NotificationsPage() {
             <Button
               className="w-full bg-cyan-500 hover:bg-cyan-600 text-black font-semibold"
               onClick={handleSend}
-              disabled={sending || !title.trim() || !body.trim() || (mode === "specific" && !selectedUser)}
+              disabled={sending || !title.trim() || !body.trim() || (mode === "specific" && (!selectedUser || !selectedUser.fcm_token))}
             >
               {sending ? (
                 <span className="flex items-center gap-2"><RefreshCw className="h-4 w-4 animate-spin" />Sending…</span>
