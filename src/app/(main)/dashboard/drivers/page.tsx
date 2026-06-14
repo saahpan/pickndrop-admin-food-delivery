@@ -56,6 +56,20 @@ interface Driver {
   email_verified: boolean;
   phone_verified: boolean;
   created_at: string | null;
+  // Onboarding step timestamps
+  profile_picture_saved_at: string | null;
+  drivers_license_saved_at: string | null;
+  email_verified_at: string | null;
+  phone_verified_at: string | null;
+  vehicle_info_saved_at: string | null;
+  terms_accepted_at: string | null;
+  persona_completed_at: string | null;
+  drivers_license_persona_completed_at: string | null;
+  application_submitted_at: string | null;
+  background_check_started_at: string | null;
+  camera_opt_in_at: string | null;
+  last_login_at: string | null;
+  last_login_method: string | null;
 }
 
 const COUNTRY_FLAGS: Record<string, string> = {
@@ -562,10 +576,77 @@ function DriverSheet({
               value={
                 <span className={driver.email_verified ? "text-green-400" : "text-red-400"}>
                   {driver.email_verified ? "Yes" : "No"}
+                  {driver.email_verified_at && (
+                    <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                      {new Date(driver.email_verified_at).toLocaleString()}
+                    </span>
+                  )}
                 </span>
               }
             />
+            <Row
+              label="Phone Verified"
+              value={
+                <span className={driver.phone_verified ? "text-green-400" : "text-red-400"}>
+                  {driver.phone_verified ? "Yes" : "No"}
+                  {driver.phone_verified_at && (
+                    <span className="ml-1.5 text-xs text-muted-foreground font-normal">
+                      {new Date(driver.phone_verified_at).toLocaleString()}
+                    </span>
+                  )}
+                </span>
+              }
+            />
+            {driver.last_login_at && (
+              <Row
+                label="Last Login"
+                value={
+                  <span className="text-sm">
+                    {new Date(driver.last_login_at).toLocaleString()}
+                    {driver.last_login_method && (
+                      <span className="ml-1.5 rounded px-1.5 py-0.5 text-xs bg-muted text-muted-foreground font-normal">
+                        {driver.last_login_method}
+                      </span>
+                    )}
+                  </span>
+                }
+              />
+            )}
           </Section>
+
+          {/* Onboarding Timeline */}
+          {(() => {
+            const timeline: { label: string; ts: string | null }[] = [
+              { label: "Profile Photo",           ts: driver.profile_picture_saved_at },
+              { label: "Driver's License",        ts: driver.drivers_license_saved_at },
+              { label: "License Verified (ID)",   ts: driver.drivers_license_persona_completed_at },
+              { label: "Selfie Verified",         ts: driver.persona_completed_at },
+              { label: "Vehicle Info",            ts: driver.vehicle_info_saved_at },
+              { label: "Terms Accepted",          ts: driver.terms_accepted_at },
+              { label: "Application Submitted",   ts: driver.application_submitted_at },
+              { label: "Background Check",        ts: driver.background_check_started_at },
+              { label: "Camera Opt-In",           ts: driver.camera_opt_in_at },
+            ];
+            const recorded = timeline.filter((t) => t.ts !== null);
+            if (recorded.length === 0) return null;
+            return (
+              <Section title="Onboarding Timeline">
+                {recorded
+                  .sort((a, b) => new Date(a.ts!).getTime() - new Date(b.ts!).getTime())
+                  .map((t) => (
+                    <Row
+                      key={t.label}
+                      label={t.label}
+                      value={
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {new Date(t.ts!).toLocaleString()}
+                        </span>
+                      }
+                    />
+                  ))}
+              </Section>
+            );
+          })()}
 
           {/* Vehicle */}
           <Section title="Vehicle Information">
