@@ -921,6 +921,7 @@ export default function DriversPage() {
   const [filtered, setFiltered] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeStatus, setActiveStatus] = useState("all");
+  const [countryFilter, setCountryFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
 
@@ -939,10 +940,15 @@ export default function DriversPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const availableCountries = [...new Set(drivers.map((d) => d.country).filter(Boolean))].sort();
+
   useEffect(() => {
     let list = drivers;
     if (activeStatus !== "all") {
       list = list.filter((d) => d.onboarding_status === activeStatus);
+    }
+    if (countryFilter !== "all") {
+      list = list.filter((d) => d.country === countryFilter);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -957,7 +963,7 @@ export default function DriversPage() {
       );
     }
     setFiltered(list);
-  }, [drivers, activeStatus, search]);
+  }, [drivers, activeStatus, countryFilter, search]);
 
   function handleDriverUpdate(id: string, update: Record<string, string>) {
     setDrivers((prev) =>
@@ -1005,14 +1011,30 @@ export default function DriversPage() {
           ))}
         </div>
 
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search name, email, country, plate..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative max-w-sm flex-1 min-w-48">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search name, email, country, plate..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          {availableCountries.length > 0 && (
+            <select
+              value={countryFilter}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              className="rounded-md border border-input bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="all">All Countries</option>
+              {availableCountries.map((c) => (
+                <option key={c} value={c}>
+                  {COUNTRY_FLAGS[c] || ""} {COUNTRY_NAMES[c] || c}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <Card>
