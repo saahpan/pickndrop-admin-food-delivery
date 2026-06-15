@@ -64,7 +64,6 @@ export default async (req) => {
         order: {
           search_type: 'app_invitation',
           package_id: process.env.VF_PACKAGE_ID,
-          reference_code: decoded.uid,
           first_name: firstName,
           last_name: lastName,
           email,
