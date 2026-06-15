@@ -3,7 +3,6 @@
 //
 // POST body: { firstName, lastName, email, phone }
 // Required env vars: VF_AUTH_KEY, VF_PACKAGE_ID, FIREBASE_FOOD_SA
-// Optional env var:  VF_ENDPOINT (defaults to production API)
 
 import * as admin from 'firebase-admin';
 
@@ -24,35 +23,34 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-export const handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
+export default async (req) => {
+  if (req.method === 'OPTIONS') return new Response('', { status: 200, headers: CORS });
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: CORS });
   }
 
   let decoded;
   try {
-    const auth = event.headers.authorization ?? event.headers.Authorization ?? '';
+    const auth = req.headers.get('authorization') ?? '';
     if (!auth.startsWith('Bearer ')) throw new Error('Missing token');
     decoded = await admin.auth().verifyIdToken(auth.slice(7));
   } catch {
-    return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Unauthorized' }) };
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: CORS });
   }
 
   let body;
   try {
-    body = JSON.parse(event.body || '{}');
+    body = await req.json();
   } catch {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON' }) };
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: CORS });
   }
 
   const { firstName, lastName, email, phone } = body;
   if (!firstName || !lastName || !email || !phone) {
-    return {
-      statusCode: 400,
-      headers: CORS,
-      body: JSON.stringify({ error: 'firstName, lastName, email, and phone are required' }),
-    };
+    return new Response(
+      JSON.stringify({ error: 'firstName, lastName, email, and phone are required' }),
+      { status: 400, headers: CORS },
+    );
   }
 
   try {
@@ -75,8 +73,8 @@ export const handler = async (event) => {
       }),
     });
 
-    return { statusCode: res.status, headers: CORS, body: await res.text() };
+    return new Response(await res.text(), { status: res.status, headers: CORS });
   } catch (err) {
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: CORS });
   }
 };
