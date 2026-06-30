@@ -12,7 +12,7 @@ const TAXI_API_BASE = process.env.TAXI_API_BASE_URL ?? "https://taxiapp.thepickn
 
 async function verifyLaravelToken(bearerToken: string): Promise<boolean> {
   try {
-    const res = await fetch(`${TAXI_API_BASE}/user-profile`, {
+    const res = await fetch(`${TAXI_API_BASE}/user`, {
       headers: { Authorization: `Bearer ${bearerToken}` },
     });
     return res.ok;
