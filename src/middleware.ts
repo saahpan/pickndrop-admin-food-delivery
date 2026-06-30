@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isAuthPath = AUTH_PATHS.some((p) => pathname.startsWith(p));
-  if (isAuthPath || pathname.startsWith("/api/auth")) {
+  if (isAuthPath || pathname.startsWith("/api/auth") || pathname.startsWith("/api/vf-proxy")) {
     return NextResponse.next();
   }
 
