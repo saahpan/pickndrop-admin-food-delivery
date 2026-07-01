@@ -65,7 +65,6 @@ export async function POST(req: NextRequest) {
           last_name: lastName,
           email,
           phone,
-          reference_code: String(driverId), // used in webhook to identify driver
         },
       }),
     });
