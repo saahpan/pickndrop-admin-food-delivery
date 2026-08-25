@@ -33,6 +33,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Background-check fee paywall. The server's `enforced` flag governs this
+  // gate (dormant until BG_CHECK_PAYWALL_ENFORCED flips on the Laravel side),
+  // so pre-paywall app versions keep working during the rollout window.
+  // `vf_paid` already coalesces free-fee countries to true.
+  try {
+    const statusRes = await fetch(`${TAXI_API_BASE}/driver/bg-check-payment-status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!statusRes.ok) {
+      console.error("[vf-proxy] payment-status check failed:", statusRes.status);
+      return NextResponse.json({ error: "Could not verify payment status" }, { status: 502 });
+    }
+    const pay = ((await statusRes.json()) as { data?: { enforced?: boolean; vf_paid?: boolean } })?.data;
+    if (pay?.enforced && !pay?.vf_paid) {
+      return NextResponse.json(
+        { error: "Payment required before starting the Verified First check", code: "payment_required" },
+        { status: 402 },
+      );
+    }
+  } catch (err) {
+    console.error("[vf-proxy] payment-status network error:", err);
+    return NextResponse.json({ error: "Could not verify payment status" }, { status: 502 });
+  }
+
   let body: { driverId?: number; firstName?: string; lastName?: string; email?: string; phone?: string };
   try {
     body = await req.json();
