@@ -45,7 +45,23 @@ export async function POST(req: NextRequest) {
       console.error("[vf-proxy] payment-status check failed:", statusRes.status);
       return NextResponse.json({ error: "Could not verify payment status" }, { status: 502 });
     }
-    const pay = ((await statusRes.json()) as { data?: { enforced?: boolean; vf_paid?: boolean } })?.data;
+    const pay = (
+      (await statusRes.json()) as {
+        data?: { enforced?: boolean; vf_paid?: boolean; vf_enabled?: boolean };
+      }
+    )?.data;
+    // Per-country provider availability (countries.vf_enabled — e.g. VF is
+    // disabled for Canada, Checkr-only). Refuse BEFORE creating the VF-side
+    // order; absent field (older Laravel) means enabled.
+    if (pay?.vf_enabled === false) {
+      return NextResponse.json(
+        {
+          error: "Verified First is not available in your country. Please use Checkr instead.",
+          code: "provider_disabled",
+        },
+        { status: 403 },
+      );
+    }
     if (pay?.enforced && !pay?.vf_paid) {
       return NextResponse.json(
         { error: "Payment required before starting the Verified First check", code: "payment_required" },
